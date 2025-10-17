@@ -1,0 +1,106 @@
+#!/usr/bin/env python
+
+"""
+Script to publish joint states and broadcast TF transforms for the Dobot Magician robot.
+"""
+
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import JointState
+from tf2_ros import TransformBroadcaster
+from geometry_msgs.msg import TransformStamped
+import math
+
+from tf_transformations import euler_from_quaternion, quaternion_from_euler
+import pydobot
+
+class DobotJointPublisher(Node):
+    def __init__(self):
+        super().__init__('dobot_joint_publisher')
+        
+        # Create publisher for joint states
+        self.joint_pub = self.create_publisher(JointState, '/joint_states', 10)
+        
+        # Create TF broadcaster
+        self.tf_broadcaster = TransformBroadcaster(self)
+        
+        # Joint names
+        self.joint_names = ['joint1', 'joint2', 'joint3', 'joint4']
+        
+        # Joint positions (can be modified as needed)
+        self.joint_positions = [0.0, 0.0, 0.0, 0.0]
+        
+        # Create timer to publish at 50Hz
+        self.timer = self.create_timer(0.02, self.timer_callback)
+        
+        # Initialize Dobot connection
+        try:
+            self.dobot = pydobot.Dobot(port='/dev/ttyUSB0', verbose=False)
+            (x, y, z, r, j1, j2, j3, j4) = self.dobot.pose()
+            self.get_logger().info('Connected to Dobot Magician')
+        except Exception as e:
+            self.get_logger().error(f'Failed to connect to Dobot: {e}')
+            self.dobot = None
+        
+        self.get_logger().info('Dobot Joint Publisher Node has been started')
+        self.get_logger().info(f'Publishing joint states for: {self.joint_names}')
+    
+    def timer_callback(self):
+        """Callback function to publish joint states and TF transforms"""
+        
+        if self.dobot:
+            try:
+                # Get current joint angles from Dobot
+                (x, y, z, r, j1, j2, j3, j4) = self.dobot.pose()
+                self.get_logger().info(f'Current Dobot pose: x={x}, y={y}, z={z}, r={r}, j1={j1}, j2={j2}, j3={j3}, j4={j4}')
+                if (j1, j2, j3, j4):
+                    self.joint_positions = [math.radians(angle) for angle in (j1, j2, j3, j4)]
+                    self.get_logger().debug(f'Current joint angles: {self.joint_positions}')
+            except Exception as e:
+                self.get_logger().error(f'Error getting angles from Dobot: {e}')
+        
+        # Create and publish JointState message
+        joint_state_msg = JointState()
+        joint_state_msg.header.stamp = self.get_clock().now().to_msg()
+        joint_state_msg.header.frame_id = ''
+        joint_state_msg.name = self.joint_names
+        joint_state_msg.position = self.joint_positions
+        joint_state_msg.velocity = []
+        joint_state_msg.effort = []
+        
+        self.joint_pub.publish(joint_state_msg)
+        
+        # Broadcast TF transforms for each joint (simplified
+        current_time = self.get_clock().now().to_msg()
+        parent_frame = 'base_link'
+        for i, joint_name in enumerate(self.joint_names):
+            t = TransformStamped()
+            t.header.stamp = current_time
+            t.header.frame_id = parent_frame
+            t.child_frame_id = f'{joint_name}_link'
+            # Simplified static transforms; replace with actual kinematics if needed
+            t.transform.translation.x = 0.0
+            t.transform.translation.y = 0.0
+            t.transform.translation.z = 0.1 * (i + 1)
+            
+            # t.transform.rotation.x = q[0]
+            # t.transform.rotation.y = q[1]
+            # t.transform.rotation.z = q[2]
+            # t.transform.rotation.w = q[3]
+            
+            self.tf_broadcaster.sendTransform(t)
+            parent_frame = t.child_frame_id
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = DobotJointPublisher()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
