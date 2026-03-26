@@ -250,9 +250,3 @@ Add your preferred license here (e.g., MIT). Example: MIT License — see LICENS
 
 ---
 
-If you'd like, I can:
-- Generate a ready-to-run `play.py` + helper modules for your repository,
-- Create a sample `requirements.txt`, or
-- Produce a calibration UI script (camera corner clicker) and a robot-mapping tool.
-
-Tell me which pieces you want me to scaffold and whether your Dobot uses `pydobot` or another SDK, and the repo name if you'd like me to add files directly.
